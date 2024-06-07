@@ -24,18 +24,19 @@ def compute_motor_power(pid_controller, dt, target_x, target_y, target_z, gps, i
 
     print(f"Errors: error_x={error_x}, error_y={error_y}, error_z={error_z}")
 
-    # Convert the target coordinates to velocities
-    forward_desired = error_x * 0.1
-    sideways_desired = error_y * 0.1
-    height_diff_desired = error_z * 0.1
-    yaw_desired = 0
+    # Convert the target coordinates to velocities (adjust scaling factor as needed)
+    scaling_factor = 1.74  # Adjust this value to tune responsiveness
+    forward_desired = error_x * scaling_factor
+    sideways_desired = error_y * scaling_factor
+    height_diff_desired = error_z * scaling_factor
+    yaw_desired = 0  # For simplicity, we're not adjusting yaw here
 
     print(f"Desired: forward={forward_desired}, sideways={sideways_desired}, height_diff={height_diff_desired}")
 
     # PID control
     try:
         motor_power = pid_controller.pid(dt, forward_desired, sideways_desired,
-                                         yaw_desired, target_z,
+                                         yaw_desired, height_diff_desired,
                                          roll, pitch, yaw,
                                          z, 0, 0)
     except Exception as e:
@@ -43,6 +44,12 @@ def compute_motor_power(pid_controller, dt, target_x, target_y, target_z, gps, i
         motor_power = [0, 0, 0, 0]
 
     print(f"Motor power: {motor_power}")
+
+    # Adjust motor power for correct direction
+    motor_power[0] = -motor_power[0]  # Motor 1
+    motor_power[1] = motor_power[1]   # Motor 2
+    motor_power[2] = -motor_power[2]  # Motor 3
+    motor_power[3] = motor_power[3]   # Motor 4
 
     return motor_power
 
@@ -79,11 +86,13 @@ except Exception as e:
 target_coords = pick_up_coords
 while robot.step(timestep) != -1:
     dt = robot.getTime() - timestep
+    print(f"Time step: {dt}")
     try:
         motor_power = compute_motor_power(pid_controller, dt, target_coords[0], target_coords[1], target_coords[2], gps, imu)
         print(f"Setting motor power: {motor_power}")
         for i in range(4):
             motors[i].setVelocity(motor_power[i])
+            print(f"Motor {i+1} velocity set to: {motor_power[i]}")
     except Exception as e:
         print(f"Error in compute_motor_power: {e}")
 
@@ -91,17 +100,20 @@ while robot.step(timestep) != -1:
     x, y, z = gps.getValues()
     print(f"Current position: x={x}, y={y}, z={z}")
     if abs(x - target_coords[0]) < 0.1 and abs(y - target_coords[1]) < 0.1 and abs(z - target_coords[2]) < 0.1:
+        print("Reached pick-up coordinates")
         break
 
 # Move to drop-off coordinates
 target_coords = drop_off_coords
 while robot.step(timestep) != -1:
     dt = robot.getTime() - timestep
+    print(f"Time step: {dt}")
     try:
         motor_power = compute_motor_power(pid_controller, dt, target_coords[0], target_coords[1], target_coords[2], gps, imu)
         print(f"Setting motor power: {motor_power}")
         for i in range(4):
             motors[i].setVelocity(motor_power[i])
+            print(f"Motor {i+1} velocity set to: {motor_power[i]}")
     except Exception as e:
         print(f"Error in compute_motor_power: {e}")
 
@@ -109,6 +121,8 @@ while robot.step(timestep) != -1:
     x, y, z = gps.getValues()
     print(f"Current position: x={x}, y={y}, z={z}")
     if abs(x - target_coords[0]) < 0.1 and abs(y - target_coords[1]) < 0.1 and abs(z - target_coords[2]) < 0.1:
+        print("Reached drop-off coordinates")
         break
+
 
 
